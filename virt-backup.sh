@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# === VM Backup Script with Rotation, Email, Custom Sender, Force and Disk Exclude ===
-# Usage: ./virt-backup.sh <base_path> <vm_name> <keep_months> <recipient_email> <sender_email> [force] [exclude_disk]
-# Example: ./virt-backup.sh /backups web01 3 admin@company.com backup@company.com force sda
+# === VM Backup Script with Full Options: Rotation, Force, Exclude, Custom Notify ===
+# Usage: ./virt-backup.sh <base_path> <vm_name> <keep_months> <recipient_email> <sender_email> [force] [exclude_disk] [notify_mode]
+# Example: ./virt-backup.sh /backups web01 3 admin@company.com backup@company.com force sda errors
 
-# === Validate arguments (5 required, 6th and 7th optional) ===
+# === Validate arguments ===
 if [ $# -lt 5 ]; then
     echo "Error: Not enough arguments."
-    echo "Usage: $0 <base_path> <vm_name> <keep_months> <recipient_email> <sender_email> [force] [exclude_disk]"
-    echo "Example: $0 /backups web01 3 admin@company.com backup@company.com force sda"
+    echo "Usage: $0 <base_path> <vm_name> <keep_months> <recipient_email> <sender_email> [force] [exclude_disk] [notify_mode]"
+    echo "Example: $0 /backups web01 3 admin@company.com backup@company.com force sda errors"
     exit 1
 fi
 
@@ -19,6 +19,7 @@ RECIPIENT_EMAIL="$4"
 SENDER_EMAIL="$5"
 FORCE="${6:-}"
 EXCLUDE_DISK="${7:-}"
+NOTIFY_MODE="${8:-always}"  #default: always
 
 # === Validate keep_months ===
 if ! [[ "$KEEP_MONTHS" =~ ^[0-9]+$ ]] || [ "$KEEP_MONTHS" -lt 1 ]; then
@@ -36,6 +37,12 @@ validate_email() {
 
 validate_email "$RECIPIENT_EMAIL"
 validate_email "$SENDER_EMAIL"
+
+# === Validate notify_mode ===
+if [[ ! "$NOTIFY_MODE" =~ ^(always|errors)$ ]]; then
+    echo "Error: notify_mode must be 'always' or 'errors'. Got: $NOTIFY_MODE"
+    exit 1
+fi
 
 # === Generate current month directory (mmyyyy) ===
 CURRENT_MONTH=$(date +"%m%Y")
@@ -58,16 +65,9 @@ log "Target: $TARGET_DIR"
 log "Keep last $KEEP_MONTHS month(s)"
 log "Notification recipient: $RECIPIENT_EMAIL"
 log "Sender address: $SENDER_EMAIL"
-if [ -n "$FORCE" ]; then
-    log "Force mode: enabled (will remove .partial files if found)"
-else
-    log "Force mode: disabled (will abort if .partial file exists)"
-fi
-if [ -n "$EXCLUDE_DISK" ]; then
-    log "Exclude disk: $EXCLUDE_DISK"
-else
-    log "Exclude disk: not set"
-fi
+log "Force mode: ${FORCE:-no}"
+log "Exclude disk: ${EXCLUDE_DISK:-none}"
+log "Notify mode: $NOTIFY_MODE"
 
 # === Create parent directory ===
 mkdir -p "$PARENT_DIR"
@@ -99,7 +99,11 @@ if [ ${#partial_files[@]} -gt 0 ]; then
         fi
     else
         log "Aborting to prevent conflict. Use 'force' to override."
-        echo "$LOG" | mail -r "$SENDER_EMAIL" -s "Backup Skipped: $VM_NAME" "$RECIPIENT_EMAIL"
+        if [ "$NOTIFY_MODE" = "always" ]; then
+            echo "$LOG" | mail -r "$SENDER_EMAIL" -s "Backup Skipped: $VM_NAME" "$RECIPIENT_EMAIL"
+        else
+            log "Email skipped: notify_mode=errors"
+        fi
         exit 0
     fi
 else
@@ -151,6 +155,7 @@ fi
 # === Run backup ===
 log "Starting backup for VM: $VM_NAME"
 
+
 DOCKER_CMD=(
     docker run --rm
     -v /run:/run
@@ -168,11 +173,16 @@ if [ -n "$EXCLUDE_DISK" ]; then
     log "Adding exclude disk: $EXCLUDE_DISK"
 fi
 
-log "Running docker command..."
 
-eval "${DOCKER_CMD[*]}"
-
+log "Running docker command: ${DOCKER_CMD[*]}"
+DOCKER_OUTPUT=$(eval "${DOCKER_CMD[*]}" 2>&1)
 DOCKER_EXIT_CODE=$?
+
+
+log "=== Docker output (virtnbdbackup) ==="
+log "$DOCKER_OUTPUT"
+log "=== End of Docker output ==="
+
 
 if [ $DOCKER_EXIT_CODE -eq 0 ]; then
     log "SUCCESS: Backup completed for $VM_NAME"
@@ -182,8 +192,22 @@ else
     SUBJECT="Backup Failed: $VM_NAME"
 fi
 
-# === Send log report ===
-echo "$LOG" | mail -r "$SENDER_EMAIL" -s "$SUBJECT" "$RECIPIENT_EMAIL"
+SEND_EMAIL=false
+
+if [ "$NOTIFY_MODE" = "always" ]; then
+    SEND_EMAIL=true
+elif [ "$NOTIFY_MODE" = "errors" ] && [ $DOCKER_EXIT_CODE -ne 0 ]; then
+    SEND_EMAIL=true
+elif [ "$NOTIFY_MODE" = "errors" ] && [[ "$LOG" == *"Aborting"* || "$LOG" == *"ERROR"* ]]; then
+    SEND_EMAIL=true
+fi
+
+if [ "$SEND_EMAIL" = true ]; then
+    echo "$LOG" | mail -r "$SENDER_EMAIL" -s "$SUBJECT" "$RECIPIENT_EMAIL"
+    log "Email sent to $RECIPIENT_EMAIL (mode: $NOTIFY_MODE)"
+else
+    log "Email skipped: notify_mode=$NOTIFY_MODE and no critical event"
+fi
 
 # === Exit ===
 exit $DOCKER_EXIT_CODE
