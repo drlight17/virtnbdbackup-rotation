@@ -157,6 +157,7 @@ DOCKER_CMD=(
     -v /var/tmp:/var/tmp
     -v /etc/libvirt/qemu/nvram:/etc/libvirt/qemu/nvram
     -v /usr/share/OVMF:/usr/share/OVMF
+    -v /var/lib/libvirt/images:/var/lib/libvirt/images:ro
     -v "$BASE_PATH:/backups"
     ghcr.io/abbbi/virtnbdbackup:master
     virtnbdbackup --compress=16 -d "$VM_NAME" -l auto -o "/backups/$VM_NAME/$CURRENT_MONTH" -S
