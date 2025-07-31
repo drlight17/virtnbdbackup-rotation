@@ -18,7 +18,7 @@ KEEP_MONTHS="$3"
 RECIPIENT_EMAIL="$4"
 SENDER_EMAIL="$5"
 FORCE="${6:-}"
-EXCLUDE_DISK="${7:-}"  # Может быть пустым
+EXCLUDE_DISK="${7:-}"
 
 # === Validate keep_months ===
 if ! [[ "$KEEP_MONTHS" =~ ^[0-9]+$ ]] || [ "$KEEP_MONTHS" -lt 1 ]; then
