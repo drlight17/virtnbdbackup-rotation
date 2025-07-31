@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # === VM Backup Script with Rotation, Email, Custom Sender, Force and Disk Exclude ===
-# Usage: ./backup_vm.sh <base_path> <vm_name> <keep_months> <recipient_email> <sender_email> [force] [exclude_disk]
-# Example: ./backup_vm.sh /backups web01 3 admin@company.com backup@company.com force sda
+# Usage: ./virt-backup.sh <base_path> <vm_name> <keep_months> <recipient_email> <sender_email> [force] [exclude_disk]
+# Example: ./virt-backup.sh /backups web01 3 admin@company.com backup@company.com force sda
 
 # === Validate arguments (5 required, 6th and 7th optional) ===
 if [ $# -lt 5 ]; then
