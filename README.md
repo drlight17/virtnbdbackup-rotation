@@ -1,7 +1,8 @@
 ### Usage:
-`./virt-backup.sh <base_path> <vm_name> <keep_months> <recipient_email> <sender_email> [force] [exclude_disk]`
+`./virt-backup.sh <base_path> <vm_name> <keep_months> <recipient_email> <sender_email> [force] [exclude_disk] [notify_mode] `
+* notify_mode could be `always` (default) and `errors`
 ### Example:
-`./virt-backup.sh /backups web01 3 admin@company.com backup@company.com force sda`
+`./virt-backup.sh /backups web01 3 admin@company.com backup@company.com force sda errors`
 
 ### Additional info
  Get all backups info metadata:
